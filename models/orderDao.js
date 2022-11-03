@@ -1,6 +1,7 @@
 const { database } = require('./dataSource');
+const orderStatusEnums = require('./enums');
 
-const getOrder = async ( userId , roomId, checkIn, checkOut, pointChange ) => {
+const createOrder = async ( userId , roomId, checkIn, checkOut, pointChange ) => {
   await database.query ( `
     INSERT INTO orders
       (user_id,
@@ -19,29 +20,6 @@ const getOrder = async ( userId , roomId, checkIn, checkOut, pointChange ) => {
   `)
 
   }
-
-    const getUserPointByUserId = async ( userId ) =>
-    {
-      return await database.query(`
-    SELECT point
-      FROM users
-      WHERE id=${userId}
-    `)
-      }
-
-    const getRoomPriceByRoomId = async( roomId ) =>{ 
-      return await database.query(`
-    SELECT price
-      FROM rooms
-      WHERE id=${roomId}
-    `)
-    }
-
-
-  // 해당 시간 예약중인 상태의 order가 있다면 예약되면 안되는 로직 구현( service ) / users.price 받아와서 update 해야함
-  // 함수명 createOrder 변경
-  
-
 
 const getAllOrderByUserId = async( productId, roomId, orderStatus ) => {
   const allOrderByUserId =  await database.query(`
@@ -63,16 +41,38 @@ const getAllOrderByUserId = async( productId, roomId, orderStatus ) => {
   return allOrderByUserId
 }
 
-const deleteOrder = async ( orderId, orderStatusEnums ) => {
+const deleteOrder = async ( orderId, userId, roomPrice ) => {
+
   await database.query(`
-    UPDATE orders
-      SET orders.order_status_id=${orderStatusEnums}
-      WHERE id=${orderId}
-  `)
-  await database.query(`
+  UPDATE orders
+    SET order_status_id=${orderStatusEnums.CANCELED_ORDER_STATUS_ID}
+    WHERE id = ${orderId} AND user_id=${userId}
   
   `)
-// user point 돌려주기 ( 예약취소 > 돌려주기)
+  await database.query(`
+  UPDATE users
+    SET point=point+${roomPrice}
+  WHERE id=${userId}
+  `)
+}
+
+const getRoomPriceByRoomId = async ( roomId )=> {
+  return await database.query(`
+  SELECT
+    price
+  FROM rooms
+  WHERE id=${roomId}
+  `)
+}
+
+const getCheckInDateByOrderId = async ( orderId )=>{
+  return await database.query(`
+  SELECT 
+    check_out_date
+  FROM orders
+  WHERE id=${orderId}
+  
+  `)
 }
 
 const getOrderByOrderId = async ( orderId )=> {
@@ -94,6 +94,48 @@ const getOrderByOrderId = async ( orderId )=> {
     WHERE orders.id=${orderId}
   
   `)
+
 }
 
-module.exports = { getOrder, deleteOrder, getOrderByOrderId, getAllOrderByUserId, getUserPointByUserId, getRoomPriceByRoomId };
+const getDifferenceByOrderId = async (orderId) => {
+  return await database.query(`
+  SELECT 
+    id, 
+    check_in_date, 
+    DATEDIFF(CURDATE(), check_in_date) AS diffDate
+    FROM goodplace.orders
+    WHERE id=${orderId}
+  
+  `)
+}
+
+const getOrderStatus = async ( orderId ) => {
+  return await database.query(`
+  SELECT 
+    order_status_id AS orderStatus
+  FROM orders
+  WHERE id=${orderId}
+  
+  `)
+}
+
+const getUserPointByUserId = async ( userId ) => {
+  return await database.query(`
+  SELECT
+    point
+  FROM users
+  WHERE id=${userId}
+  `)
+}
+
+module.exports = { 
+  createOrder, 
+  deleteOrder, 
+  getOrderByOrderId, 
+  getAllOrderByUserId, 
+  getCheckInDateByOrderId,
+  getDifferenceByOrderId,
+  getRoomPriceByRoomId,
+  getOrderStatus,
+  getUserPointByUserId
+};
